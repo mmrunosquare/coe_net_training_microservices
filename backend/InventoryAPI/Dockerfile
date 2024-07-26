@@ -1,12 +1,20 @@
-FROM mcr.microsoft.com/dotnet/sdk:8.0-alpine3.19 AS builder
-WORKDIR /build
-COPY . .
-RUN dotnet publish --configuration Release --output publish
-FROM mcr.microsoft.com/dotnet/aspnet:8.0-alpine3.19 AS final
-USER app
+FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS base
 WORKDIR /app
-COPY --from=builder /build/publish/ .
-EXPOSE 80
-ENV ASPNETCORE_ENVIRONMENT=Development
-ENV ASPNETCORE_HTTP_PORTS=80
+EXPOSE 8080
+
+FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
+WORKDIR /src
+COPY ["InventoryAPI/InventoryAPI.csproj", "InventoryAPI/"]
+RUN dotnet restore "InventoryAPI/InventoryAPI.csproj"
+COPY . .
+WORKDIR "/src/InventoryAPI"
+RUN dotnet build "InventoryAPI.csproj" -c Release -o /app/build
+
+FROM build AS publish
+RUN dotnet publish "InventoryAPI.csproj" -c Release -o /app/publish
+
+FROM base AS final
+WORKDIR /app
+COPY --from=publish /app/publish .
+RUN apt-get update && apt-get install -y postgresql-client
 ENTRYPOINT ["dotnet", "InventoryAPI.dll"]
